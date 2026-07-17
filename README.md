@@ -26,7 +26,7 @@ Supabase Postgres (RLS) + Auth (Email Magic Link)
 | 前端 SPA | `supabase/functions/web/` |
 | LINE 綁定 callback | `supabase/functions/line-callback/` |
 | 排程推播 | `supabase/functions/dispatch-notifications/` |
-| 分潤抽象層 / LINE 封裝 / admin client | `supabase/functions/_shared/` |
+| 分潤抽象層 / 通知抽象層 / LINE 傳輸 / admin client | `supabase/functions/_shared/` |
 
 ## 資料模型
 
@@ -41,6 +41,14 @@ Supabase Postgres (RLS) + Auth (Email Magic Link)
 `_shared/affiliate.ts` 是可插拔抽象層，用 `AFFILIATE_PROVIDER` 環境變數切換：
 - `passthrough`（預設 / MVP）：直接回傳原連結，`status='fallback'`。
 - `affiliatesone`（預留）：拿到聯盟網 API KEY / Site ID 後啟用，產生真正的分潤連結。
+
+## 通知（LINE，可插拔）
+
+`_shared/notifier.ts` 同樣是可插拔抽象層，用 `NOTIFIER_PROVIDER` 環境變數切換：
+- `log`（預設 / MVP）：只把要送的內容印到 function log，**不需 LINE、不需使用者綁定**，方便還沒申請 LINE 前就能測整條排程流程。
+- `line`：透過 LINE Messaging API 真的推播（需 `LINE_CHANNEL_ACCESS_TOKEN`、使用者需已綁定 `line_user_id`）。
+
+切換 provider 時 `dispatch-notifications` 完全不用改。
 
 ## 前置準備與部署
 
@@ -88,6 +96,7 @@ supabase functions serve          # 本機跑所有 Edge Functions
 ```bash
 supabase secrets set \
   PUBLIC_APP_URL="https://<project-ref>.functions.supabase.co/web" \
+  NOTIFIER_PROVIDER="log" \
   LINE_CHANNEL_ACCESS_TOKEN="..." \
   LINE_CHANNEL_SECRET="..." \
   LINE_LOGIN_CHANNEL_ID="..." \
@@ -96,6 +105,8 @@ supabase secrets set \
   AFFILIATE_PROVIDER="passthrough" \
   LINE_MONTHLY_QUOTA="200"
 ```
+> MVP 先用 `NOTIFIER_PROVIDER=log`（只印 log）。要真的送 LINE 時改成 `line`：
+> `supabase secrets set NOTIFIER_PROVIDER=line` 再重新部署 `dispatch-notifications`。
 > `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` 由平台自動注入，不用手動設定。
 
 也到 **Auth → URL Configuration** 把 Site URL / Redirect URLs 設為 `PUBLIC_APP_URL`（Magic Link 才會導回前端）。
@@ -124,12 +135,14 @@ select public.schedule_dispatch();   -- 註冊每天 UTC 01:00（台北 09:00）
      -H "Authorization: Bearer <service-role-key>"
    ```
    會回傳 JSON：到期品項數、將通知的使用者、preview 內容，但不送 LINE、不改資料。
-3. **真送一則**：把自己的帳號綁定 LINE、加官方帳號好友，建立一個已到期的品項，去掉 `?dry_run=1` 再打一次 → LINE 應收到含購物連結的提醒；`notifications` 會有 `sent` 紀錄、品項 `last_notified_at` / `next_due_at` 更新。
-4. **Cron 狀態**：`select * from cron.job;` 與 `select * from cron.job_run_details order by start_time desc limit 5;`。
-5. **分潤抽象單元測試**：
+3. **log 模式（MVP，不需 LINE）**：`NOTIFIER_PROVIDER=log` 時，去掉 `?dry_run=1` 打一次 → 要送的內容會印在 function log（`supabase functions logs dispatch-notifications` 或 Dashboard），`notifications` 記為 `sent`、品項 `last_notified_at` / `next_due_at` 會更新。
+4. **真送一則**：把 `NOTIFIER_PROVIDER` 設成 `line`、自己的帳號綁定 LINE 並加官方帳號好友，建立一個已到期的品項，再打一次 → LINE 應收到含購物連結的提醒。
+5. **Cron 狀態**：`select * from cron.job;` 與 `select * from cron.job_run_details order by start_time desc limit 5;`。
+6. **抽象層單元測試**：
    ```bash
-   deno test supabase/functions/_shared/affiliate.test.ts
+   deno test supabase/functions/_shared/
    # 或： node --experimental-strip-types supabase/functions/_shared/affiliate.test.ts
+   #      node --experimental-strip-types supabase/functions/_shared/notifier.test.ts
    ```
 
 ## 之後：接真正的分潤連結

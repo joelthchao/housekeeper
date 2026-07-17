@@ -1,5 +1,6 @@
 // ============================================================
-// line.ts — LINE Messaging API push message 封裝
+// line.ts — LINE Messaging API push message 傳輸層（純 LINE 呼叫）
+// 由 notifier.ts 的 LineNotifier 使用；訊息組字在 notifier.ts。
 // 文件：https://developers.line.biz/en/reference/messaging-api/#send-push-message
 // 免費方案每月 200 則；1 次 push 給 1 位使用者算 1 則。
 // ============================================================
@@ -40,18 +41,4 @@ export async function pushMessage(
     if (body?.message) error = body.message;
   } catch { /* 忽略非 JSON 回應 */ }
   return { ok: false, status: res.status, requestId, error };
-}
-
-/** 把一位使用者的多個到期品項組成一則提醒文字訊息。 */
-export function buildReminderText(
-  items: { title: string; url: string | null }[],
-): string {
-  const lines = ["🛒 該補貨囉！以下品項差不多該回購了：", ""];
-  for (const it of items) {
-    lines.push("・" + it.title);
-    if (it.url) lines.push(it.url);
-  }
-  lines.push("");
-  lines.push("— 定期補貨提醒");
-  return lines.join("\n");
 }

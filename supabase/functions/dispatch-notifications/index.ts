@@ -13,7 +13,7 @@
 //   POST body: {"dry_run": true}  或  ?dry_run=1
 // ============================================================
 import { adminClient } from "../_shared/supabaseAdmin.ts";
-import { buildReminderText, pushMessage } from "../_shared/line.ts";
+import { buildReminderText, getNotifier } from "../_shared/notifier.ts";
 import { resolveAffiliateUrl } from "../_shared/affiliate.ts";
 
 const env = (k: string) => Deno.env.get(k) ?? "";
@@ -63,10 +63,11 @@ Deno.serve(async (req: Request) => {
   const sb = adminClient();
   const nowIso = new Date().toISOString();
   const quota = parseInt(env("LINE_MONTHLY_QUOTA") || "200", 10);
-  const lineToken = env("LINE_CHANNEL_ACCESS_TOKEN");
+  const notifier = getNotifier(env);
 
   const summary = {
     dry_run: dryRun,
+    notifier: notifier.name,
     due_items: 0,
     users_considered: 0,
     messages_sent: 0,
@@ -94,14 +95,18 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // 2b. 撈這些使用者中「有綁 LINE 且開啟通知」的 profile
+  // 2b. 撈這些使用者中「開啟通知」的 profile
+  //     line provider 需已綁定 line_user_id；log provider 不需要。
   const userIds = [...new Set(dueItems.map((i) => i.user_id))];
-  const { data: profs } = await sb
+  let profQuery = sb
     .from("profiles")
     .select("id,line_user_id,notify_enabled")
     .in("id", userIds)
-    .eq("notify_enabled", true)
-    .not("line_user_id", "is", null);
+    .eq("notify_enabled", true);
+  if (notifier.requiresBinding) {
+    profQuery = profQuery.not("line_user_id", "is", null);
+  }
+  const { data: profs } = await profQuery;
   const profileMap = new Map<string, Profile>(
     ((profs ?? []) as Profile[]).map((p) => [p.id, p]),
   );
@@ -166,12 +171,8 @@ Deno.serve(async (req: Request) => {
       continue;
     }
 
-    // 5. 真的推播
-    const result = await pushMessage(
-      profile.line_user_id!,
-      [{ type: "text", text }],
-      lineToken,
-    );
+    // 5. 送出（依 NOTIFIER_PROVIDER：log 只印 log、line 真的推播）
+    const result = await notifier.send(profile.line_user_id, text);
 
     if (result.ok) {
       sentCount++;
@@ -182,7 +183,7 @@ Deno.serve(async (req: Request) => {
       await sb.from("notifications").insert({
         user_id: uid,
         status: "sent",
-        line_message_id: result.requestId ?? null,
+        line_message_id: result.id ?? null,
       });
     } else {
       summary.failed++;
