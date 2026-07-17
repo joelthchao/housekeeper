@@ -4,6 +4,8 @@
 
 **技術上完全依賴 Supabase 一個平台**（Postgres + Auth + Edge Functions + Cron），前端也由 Edge Function 直接回傳 HTML，不需要另外的前端主機。
 
+> 🚀 **想直接把 MVP 跑起來？** 照著 [`docs/mvp-runbook.md`](./docs/mvp-runbook.md) 做（Tier 0：雲端 + log 通知，零外部帳號即可端到端驗證）。
+
 ---
 
 ## 架構
@@ -22,7 +24,8 @@ Supabase Postgres (RLS) + Auth (Email Magic Link)
 
 | 元件 | 位置 |
 |---|---|
-| 資料表 / RLS / trigger / cron | `supabase/migrations/` |
+| 資料表 / RLS / trigger | `supabase/migrations/` |
+| 每日排程（雲端一次性腳本） | `supabase/scripts/enable_cron.sql` |
 | 前端 SPA | `supabase/functions/web/` |
 | LINE 綁定 callback | `supabase/functions/line-callback/` |
 | 排程推播 | `supabase/functions/dispatch-notifications/` |
@@ -72,10 +75,14 @@ supabase functions serve          # 本機跑所有 Edge Functions
 
 - 前端：瀏覽 `http://127.0.0.1:54321/functions/v1/web`
 - 登入信（Magic Link）會寄到本機 Inbucket：`http://127.0.0.1:54324`
+- 每日排程（`pg_cron`/`pg_net`）**不在 migrations 裡**，是雲端一次性腳本（`supabase/scripts/enable_cron.sql`），所以本機 `db reset` 不會因為缺 `pg_net` 卡住。
 
 ---
 
 ## 部署指南
+
+> 需要 **Supabase CLI**（`brew install supabase/tap/supabase` 或 `npm i -g supabase`）。
+> 只想快速把 MVP 跑起來、先不接 LINE，直接照 [`docs/mvp-runbook.md`](./docs/mvp-runbook.md)（Tier 0）即可；本節是完整（含 LINE）的部署參考。
 
 ### 1. 建立 Supabase 專案
 到 [supabase.com](https://supabase.com) 建專案，記下 **Project URL**、**anon key**、**service_role key**（Project Settings → API）。
@@ -118,12 +125,17 @@ supabase functions deploy web line-callback dispatch-notifications
 ```
 
 ### 5. 啟用每日排程（Cron）
-排程需要 function URL 與 service role key，存在 Vault（不寫死在 git）。在 SQL Editor 執行：
+排程需要 function URL 與 service role key，存在 Vault（不寫死在 git）。在 **SQL Editor** 執行：
 ```sql
+-- 1) 先建立兩個 Vault 機密
 select vault.create_secret(
-  'https://<project-ref>.functions.supabase.co/dispatch-notifications', 'dispatch_url');
+  'https://<project-ref>.supabase.co/functions/v1/dispatch-notifications', 'dispatch_url');
 select vault.create_secret('<your-service-role-key>', 'service_role_key');
+```
+接著把 `supabase/scripts/enable_cron.sql` 全文貼進 SQL Editor 執行（它會啟用 `pg_cron`/`pg_net` 並建立 `schedule_dispatch()`），最後：
+```sql
 select public.schedule_dispatch();   -- 註冊每天 UTC 01:00（台北 09:00）的排程
+select * from cron.job;              -- 確認已註冊
 ```
 
 ## 驗證

@@ -1,7 +1,12 @@
 -- ============================================================
--- 0003_cron.sql — 每日排程呼叫 dispatch-notifications
+-- enable_cron.sql — 每日排程呼叫 dispatch-notifications
+--
+-- ⚠️ 這不是 migration，是「雲端一次性腳本」。請在 Supabase Dashboard
+--    → SQL Editor 手動執行（不要放進 migrations，因為本機 supabase start
+--    不一定有 pg_net，會讓 db reset 卡住）。
+--
 -- 使用 pg_cron + pg_net；機密（function URL、service role key）存在 Vault，
--- 不寫死在 migration 裡。
+-- 不寫死在腳本裡。執行前請先建立 Vault 機密（見下方註解與 docs/mvp-runbook.md）。
 -- ============================================================
 
 create extension if not exists pg_cron;

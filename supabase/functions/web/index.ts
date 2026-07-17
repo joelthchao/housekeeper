@@ -63,7 +63,7 @@ const PAGE = `<!doctype html>
 <main class="wrap" id="app"></main>
 <div class="toast" id="toast"></div>
 <script type="module">
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 const CFG = __CONFIG__;
 const sb = createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
 

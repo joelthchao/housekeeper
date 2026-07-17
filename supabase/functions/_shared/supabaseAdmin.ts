@@ -1,8 +1,8 @@
 // ============================================================
 // supabaseAdmin.ts — service role client（繞過 RLS，供排程 / callback 使用）
 // ============================================================
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 function must(key: string): string {
   const v = Deno.env.get(key);
