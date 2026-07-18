@@ -1,70 +1,23 @@
-// ============================================================
-// web — 前端 SPA（Edge Function 直接回傳 text/html）
-//
-// 因為 Supabase Storage 會把 HTML 以 text/plain 回傳、不適合當網站主機，
-// 這裡改由 Edge Function 出 HTML，讓整個系統只靠 Supabase 一個平台。
-// 頁面用 hash 路由，從 CDN 載入 supabase-js，以 anon key + RLS 直接存取資料。
-// ============================================================
-
-const env = (k: string) => Deno.env.get(k) ?? "";
-
-// SUPABASE_URL / SUPABASE_ANON_KEY 是 Edge Function 內建注入的環境變數。
-const CONFIG = {
-  SUPABASE_URL: env("SUPABASE_URL"),
-  SUPABASE_ANON_KEY: env("SUPABASE_ANON_KEY"),
-  APP_URL: env("PUBLIC_APP_URL"),
-  LINE_LOGIN_CHANNEL_ID: env("LINE_LOGIN_CHANNEL_ID"),
-  LINE_LOGIN_REDIRECT_URI: env("LINE_LOGIN_REDIRECT_URI"),
-};
-
-const PAGE = `<!doctype html>
-<html lang="zh-Hant">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>定期補貨提醒</title>
-<style>
-  :root { --bg:#f5f6f8; --card:#fff; --line:#06c755; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb; --danger:#dc2626; }
-  * { box-sizing: border-box; }
-  body { margin:0; font-family:-apple-system,"Noto Sans TC",system-ui,sans-serif; background:var(--bg); color:var(--ink); }
-  header { background:var(--card); border-bottom:1px solid var(--border); position:sticky; top:0; }
-  .wrap { max-width:560px; margin:0 auto; padding:16px; }
-  nav { display:flex; gap:8px; align-items:center; }
-  nav .title { font-weight:700; margin-right:auto; }
-  nav a { color:var(--muted); text-decoration:none; font-size:14px; padding:6px 8px; border-radius:8px; cursor:pointer; }
-  nav a.active { color:var(--ink); background:var(--bg); }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; }
-  h2 { font-size:16px; margin:0 0 12px; }
-  label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
-  input[type=text], input[type=email], input[type=number], input[type=url] {
-    width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:10px; font-size:15px; }
-  .presets { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
-  .chip { padding:8px 12px; border:1px solid var(--border); border-radius:999px; background:#fff; cursor:pointer; font-size:14px; }
-  .chip.sel { border-color:var(--line); color:var(--line); font-weight:600; }
-  button.primary { width:100%; margin-top:14px; padding:12px; background:var(--line); color:#fff; border:0; border-radius:10px; font-size:15px; font-weight:600; cursor:pointer; }
-  button.ghost { background:#fff; border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer; }
-  button.link { background:none; border:0; color:var(--danger); font-size:13px; cursor:pointer; padding:6px; }
-  .item { border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:10px; }
-  .item.inactive { opacity:.55; }
-  .item .top { display:flex; align-items:center; gap:8px; }
-  .item .name { font-weight:600; }
-  .item .meta { font-size:13px; color:var(--muted); margin-top:4px; }
-  .item .row { display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
-  .item .row input[type=number] { width:80px; }
-  a.shop { color:var(--line); font-size:13px; text-decoration:none; }
-  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#111; color:#fff; padding:10px 16px; border-radius:999px; font-size:14px; opacity:0; transition:opacity .2s; pointer-events:none; }
-  .toast.show { opacity:.95; }
-  .muted { color:var(--muted); font-size:13px; }
-  .empty { text-align:center; color:var(--muted); padding:24px 0; }
-</style>
-</head>
-<body>
-<header><div class="wrap"><nav id="nav"></nav></div></header>
-<main class="wrap" id="app"></main>
-<div class="toast" id="toast"></div>
-<script type="module">
+// 前端邏輯（靜態，部署在 GitHub Pages）。
+// 只用「公開金鑰」：anon key、Supabase URL、LINE Login channel ID、redirect URI。
+// 秘密（service_role、channel secret）從不進瀏覽器——那些只在 Supabase Edge Functions。
+// 安全靠資料庫的 RLS（每個人只能存取自己的資料），不是靠藏 anon key。
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-const CFG = __CONFIG__;
+
+const CFG = window.APP_CONFIG || {};
+
+// 尚未設定 config.js 時，給清楚指示而不是壞掉
+function notConfigured() {
+  return !CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY ||
+    CFG.SUPABASE_URL.indexOf("YOUR-REF") >= 0;
+}
+if (notConfigured()) {
+  document.getElementById("app").innerHTML =
+    '<div class="banner">尚未設定。請編輯 <b>frontend/config.js</b>，填入你的 Supabase URL / anon key ' +
+    '（以及要用 LINE 綁定時的 LINE Login 資訊），再重新整理。</div>';
+  throw new Error("APP_CONFIG not set");
+}
+
 const sb = createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
 
 var state = { session:null, profile:null, items:[], addInterval:30 };
@@ -164,7 +117,7 @@ function renderSettings(){
     lineBlock = '<p>✅ 已綁定 LINE'+(p.line_display_name?'（'+esc(p.line_display_name)+'）':'')+'</p>' +
                 '<button class="ghost" data-act="line-unbind">解除綁定</button>';
   } else if(!CFG.LINE_LOGIN_CHANNEL_ID){
-    lineBlock = '<p class="muted">尚未設定 LINE Login（需部署者填入環境變數）。</p>';
+    lineBlock = '<p class="muted">尚未設定 LINE Login（config.js 的 LINE_LOGIN_CHANNEL_ID 為空）。Tier 0 用 log 通知可先略過。</p>';
   } else {
     lineBlock = '<p class="muted">綁定後才能收到補貨提醒推播。</p>' +
                 '<button class="primary" data-act="line-bind">綁定 LINE 接收通知</button>';
@@ -291,22 +244,3 @@ sb.auth.onAuthStateChange(function(_e, session){ state.session = session; render
   checkLineReturn();
   render();
 })();
-</script>
-</body>
-</html>`;
-
-Deno.serve((req: Request) => {
-  const url = new URL(req.url);
-  // 健康檢查
-  if (url.pathname.endsWith("/health")) {
-    return new Response("ok", { status: 200 });
-  }
-  const html = PAGE.replace("__CONFIG__", JSON.stringify(CONFIG));
-  return new Response(html, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
-    },
-  });
-});

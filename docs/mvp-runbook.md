@@ -1,7 +1,8 @@
-# MVP Runbook — Tier 0（雲端 · log 通知 · 零外部帳號）
+# MVP Runbook — Tier 0（前端 GitHub Pages · 後端 Supabase · log 通知 · 零外部帳號）
 
-目標：在 **Supabase 雲端免費專案**上把整條流程跑通、自己端到端驗證。
-此階段：
+目標：把整條流程跑通、自己端到端驗證。架構：
+- **前端**：靜態站 `frontend/`，放 **GitHub Pages**
+- **後端**：**Supabase**（Postgres + Auth + Edge Functions）
 - 通知用 `NOTIFIER_PROVIDER=log`（只印 log，**不需要 LINE**）
 - 分潤用 `AFFILIATE_PROVIDER=passthrough`（原連結直傳，**不需要聯盟網**）
 
@@ -11,8 +12,8 @@
 
 ## 你需要
 - 一個 Supabase 帳號（免費方案即可）
+- 這個 repo（已在你的 GitHub 上）
 - 本機安裝 **Supabase CLI**：`brew install supabase/tap/supabase`（或 `npm i -g supabase`）
-- 這個 repo clone 到本機
 
 ---
 
@@ -24,16 +25,23 @@ Dashboard → **New project**。建好後記下（Settings → API）：
 - **Project URL**：`https://<ref>.supabase.co`
 - **anon key**、**service_role key**
 
-### 2. 連結 repo 到雲端專案
+### 2. 開啟 GitHub Pages + 填前端設定
+1. GitHub repo → **Settings → Pages → Build and deployment → Source** 選 **GitHub Actions**。
+2. 編輯 `frontend/config.js`，填入：
+   - `SUPABASE_URL`：`https://<ref>.supabase.co`
+   - `SUPABASE_ANON_KEY`：你的 anon key
+   - `APP_URL`：`https://<你的帳號>.github.io/housekeeper/`
+   - （Tier 0 先不用管 LINE 兩個欄位）
+3. commit 並 push 到 `main`（或在 Actions 手動跑 **Deploy frontend to GitHub Pages**）。完成後前端會在 `https://<你的帳號>.github.io/housekeeper/`。
+   > 這些都是公開值，放進 repo 沒有安全問題；秘密金鑰不在這。
+
+### 3. 連結 repo 到雲端專案 + 設定 secrets（Tier 0 不需要 LINE）
 ```bash
 supabase login
 supabase link --project-ref <ref>
-```
 
-### 3. 設定 secrets（Tier 0 不需要 LINE）
-```bash
 supabase secrets set \
-  PUBLIC_APP_URL="https://<ref>.supabase.co/functions/v1/web" \
+  PUBLIC_APP_URL="https://<你的帳號>.github.io/housekeeper/" \
   NOTIFIER_PROVIDER="log" \
   AFFILIATE_PROVIDER="passthrough" \
   LINE_MONTHLY_QUOTA="200"
@@ -42,17 +50,17 @@ supabase secrets set \
 
 ### 4. 設定 Auth 導回網址
 Dashboard → **Authentication → URL Configuration**：
-- **Site URL**：`https://<ref>.supabase.co/functions/v1/web`
+- **Site URL**：`https://<你的帳號>.github.io/housekeeper/`
 - **Redirect URLs**：也加入同一個網址（Magic Link 才會導回前端）
 
 ### 5. 套用資料庫 + 部署 functions
 ```bash
 supabase db push
-supabase functions deploy web line-callback dispatch-notifications
+supabase functions deploy line-callback dispatch-notifications
 ```
 
 ### 6. 端到端驗證
-1. 瀏覽器開 `https://<ref>.supabase.co/functions/v1/web`
+1. 瀏覽器開 `https://<你的帳號>.github.io/housekeeper/`
 2. 用你的 Email 登入 → 收登入信點連結（雲端內建寄信，低量測試 OK；沒收到見下方「Email 注意」）
 3. 新增一個品項（週期先設短一點方便測）
 4. **讓它到期**：Dashboard → Table editor → `items`，把該列 `next_due_at` 改成過去時間（或把 `created_at` 改成很久以前，trigger 會重算）
@@ -111,7 +119,8 @@ Supabase 內建寄信有速率限制，預設較適合少量/自己測試。要�
      LINE_LOGIN_CHANNEL_SECRET="..." \
      LINE_LOGIN_REDIRECT_URI="https://<ref>.supabase.co/functions/v1/line-callback"
    ```
-4. 重新部署：`supabase functions deploy dispatch-notifications line-callback`
-5. 在網頁「設定」綁定自己的 LINE、加官方帳號好友，讓品項到期後重跑 dispatch → **手機收到提醒**。
+4. 重新部署 functions：`supabase functions deploy dispatch-notifications line-callback`
+5. **更新前端** `frontend/config.js` 的 `LINE_LOGIN_CHANNEL_ID` 與 `LINE_LOGIN_REDIRECT_URI`（= `https://<ref>.supabase.co/functions/v1/line-callback`），push 讓 GitHub Pages 重新發佈。
+6. 在網頁「設定」綁定自己的 LINE、加官方帳號好友，讓品項到期後重跑 dispatch → **手機收到提醒**。
 
 > 之後要真的賺分潤（Tier 2）：與 Affiliates.One 簽約拿到憑證，實作 `AffiliatesOneProvider.resolve()`，把 `AFFILIATE_PROVIDER` 設成 `affiliatesone`，重新部署即可，其餘不動。

@@ -25,9 +25,11 @@ port = 54324
 
 [auth]
 enabled = true
-# 本機開發時的站台 URL；正式環境請在 Supabase Dashboard 設定
-site_url = "http://127.0.0.1:54321/functions/v1/web"
-additional_redirect_urls = ["http://127.0.0.1:54321/functions/v1/web"]
+# 前端是靜態站（GitHub Pages / 本機 static server），不再由 Edge Function 出頁。
+# 本機測試預設用 http://localhost:8000（在 frontend/ 執行 `python3 -m http.server 8000`）。
+# 正式環境請在 Supabase Dashboard → Authentication → URL Configuration 填 GitHub Pages 網址。
+site_url = "http://localhost:8000"
+additional_redirect_urls = ["http://localhost:8000"]
 jwt_expiry = 3600
 enable_signup = true
 
@@ -37,9 +39,7 @@ enable_signup = true
 enable_confirmations = false
 
 # --- Edge Functions ---
-# web：前端 SPA（公開，不需 JWT 即可 GET）
-[functions.web]
-verify_jwt = false
+# （前端不再是 Edge Function；已改為 GitHub Pages 靜態站，見 frontend/）
 
 # line-callback：LINE Login OAuth 導回（公開）
 [functions.line-callback]

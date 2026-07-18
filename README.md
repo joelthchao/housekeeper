@@ -2,31 +2,36 @@
 
 讓使用者登記想定期補貨的品項／電商連結、設定補貨週期，系統每天挑出「差不多該補貨」的人，透過 **LINE** 推播提醒，並在購物連結附掛**聯盟行銷分潤連結**。
 
-**技術上完全依賴 Supabase 一個平台**（Postgres + Auth + Edge Functions + Cron），前端也由 Edge Function 直接回傳 HTML，不需要另外的前端主機。
+**後端完全依賴 Supabase**（Postgres + Auth + Edge Functions + Cron）；**前端是純靜態站，放在 GitHub Pages**（免費、免另開帳號）。
 
-> 🚀 **想直接把 MVP 跑起來？** 照著 [`docs/mvp-runbook.md`](./docs/mvp-runbook.md) 做（Tier 0：雲端 + log 通知，零外部帳號即可端到端驗證）。
+> 為什麼前端不放 Supabase？因為 Supabase 免費方案（Storage 與 Edge Functions）在預設網域上會把 `text/html` 改寫成 `text/plain`、無法渲染網頁，需要 Pro + 自訂網域才行。改用 GitHub Pages 最省事，且安全性不受影響——前端只帶「公開金鑰」，真正守門的是資料庫 RLS。
+
+> 🚀 **想直接把 MVP 跑起來？** 照著 [`docs/mvp-runbook.md`](./docs/mvp-runbook.md) 做（Tier 0：GitHub Pages + Supabase + log 通知，零外部帳號即可端到端驗證）。
 
 ---
 
 ## 架構
 
 ```
-瀏覽器 ── GET ──▶ Edge Function: web ──▶ 單頁 HTML/JS SPA（CDN 載入 supabase-js）
-   │  anon key + RLS 直接讀寫自己的資料
+瀏覽器 ─ 載入 ─▶ GitHub Pages（靜態 index.html/app.js/config.js，CDN 載入 supabase-js）
+   │  帶 anon key，經 RLS 只能讀寫自己的資料
    ▼
 Supabase Postgres (RLS) + Auth (Email Magic Link)
    ▲                                  ▲
    │ 綁定 LINE                         │ 每天排程 (pg_cron + pg_net)
    │ Edge Function: line-callback      ▼
-   │ (LINE Login OAuth)          Edge Function: dispatch-notifications
-   │                              撈到期品項 → 解析分潤連結 → LINE push → 更新狀態
+   │ (LINE Login OAuth，回 302 轉址)   Edge Function: dispatch-notifications
+   │                              撈到期品項 → 解析分潤連結 → 送通知 → 更新狀態
 ```
+
+秘密金鑰（service_role、LINE channel secret…）只存在於 Edge Functions，從不進瀏覽器。
 
 | 元件 | 位置 |
 |---|---|
+| 前端靜態站（GitHub Pages） | `frontend/` |
+| Pages 發佈 workflow | `.github/workflows/pages.yml` |
 | 資料表 / RLS / trigger | `supabase/migrations/` |
 | 每日排程（雲端一次性腳本） | `supabase/scripts/enable_cron.sql` |
-| 前端 SPA | `supabase/functions/web/` |
 | LINE 綁定 callback | `supabase/functions/line-callback/` |
 | 排程推播 | `supabase/functions/dispatch-notifications/` |
 | 分潤抽象層 / 通知抽象層 / LINE 傳輸 / admin client | `supabase/functions/_shared/` |
@@ -70,10 +75,13 @@ Supabase Postgres (RLS) + Auth (Email Magic Link)
 ```bash
 supabase start                    # 起本機 Postgres / Auth / Studio / Inbucket(信箱)
 supabase db reset                 # 套用 migrations + seed.sql（含測試資料）
-supabase functions serve          # 本機跑所有 Edge Functions
+supabase functions serve          # 本機跑 Edge Functions（line-callback / dispatch-notifications）
+
+# 另開一個終端機跑前端靜態站
+cd frontend && python3 -m http.server 8000
 ```
 
-- 前端：瀏覽 `http://127.0.0.1:54321/functions/v1/web`
+- 前端：瀏覽 `http://localhost:8000`（先在 `frontend/config.js` 填本機 Supabase 的 URL/anon key）
 - 登入信（Magic Link）會寄到本機 Inbucket：`http://127.0.0.1:54324`
 - 每日排程（`pg_cron`/`pg_net`）**不在 migrations 裡**，是雲端一次性腳本（`supabase/scripts/enable_cron.sql`），所以本機 `db reset` 不會因為缺 `pg_net` 卡住。
 
@@ -96,32 +104,36 @@ supabase functions serve          # 本機跑所有 Edge Functions
 2. **LINE Login channel（負責綁定 userId）**
    - 同一 Provider 下建立 LINE Login channel。
    - 在 channel 設定裡 **連結（link）到上面的 Messaging API 官方帳號**（如此登入時可用 `bot_prompt=aggressive` 順帶加好友，推播才送得出去）。
-   - Callback URL 填：`https://<project-ref>.functions.supabase.co/line-callback`
+   - Callback URL 填：`https://<project-ref>.supabase.co/functions/v1/line-callback`
    - 取得 **Channel ID** 與 **Channel secret**。
 
 ### 3. 設定 Edge Function secrets
 ```bash
 supabase secrets set \
-  PUBLIC_APP_URL="https://<project-ref>.functions.supabase.co/web" \
+  PUBLIC_APP_URL="https://<your-user>.github.io/housekeeper/" \
   NOTIFIER_PROVIDER="log" \
   LINE_CHANNEL_ACCESS_TOKEN="..." \
   LINE_CHANNEL_SECRET="..." \
   LINE_LOGIN_CHANNEL_ID="..." \
   LINE_LOGIN_CHANNEL_SECRET="..." \
-  LINE_LOGIN_REDIRECT_URI="https://<project-ref>.functions.supabase.co/line-callback" \
+  LINE_LOGIN_REDIRECT_URI="https://<project-ref>.supabase.co/functions/v1/line-callback" \
   AFFILIATE_PROVIDER="passthrough" \
   LINE_MONTHLY_QUOTA="200"
 ```
-> MVP 先用 `NOTIFIER_PROVIDER=log`（只印 log）。要真的送 LINE 時改成 `line`：
-> `supabase secrets set NOTIFIER_PROVIDER=line` 再重新部署 `dispatch-notifications`。
+> `PUBLIC_APP_URL` 是**前端（GitHub Pages）**網址，line-callback 綁定後會導回這裡。
+> MVP 先用 `NOTIFIER_PROVIDER=log`（只印 log）。要真的送 LINE 時改成 `line` 再重新部署 `dispatch-notifications`。
 > `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` 由平台自動注入，不用手動設定。
 
-也到 **Auth → URL Configuration** 把 Site URL / Redirect URLs 設為 `PUBLIC_APP_URL`（Magic Link 才會導回前端）。
+也到 **Auth → URL Configuration** 把 Site URL / Redirect URLs 設為 GitHub Pages 網址（Magic Link 才會導回前端）。
 
-### 4. 套用資料庫 + 部署 functions
+### 4. 部署前端（GitHub Pages）+ 資料庫 + functions
 ```bash
+# 前端：填好 frontend/config.js 後 push；GitHub → Settings → Pages → Source 選 "GitHub Actions"
+#       之後每次改 frontend/ push 到 main 會自動發佈（.github/workflows/pages.yml）
+
+# 後端：
 supabase db push                                    # 套用 migrations
-supabase functions deploy web line-callback dispatch-notifications
+supabase functions deploy line-callback dispatch-notifications
 ```
 
 ### 5. 啟用每日排程（Cron）
