@@ -1,0 +1,50 @@
+# Supabase 專案設定
+# 詳細說明：https://supabase.com/docs/guides/local-development/cli/config
+project_id = "housekeeper"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+# 本機測試信箱（Magic Link 登入信會寄到這裡）
+enabled = true
+port = 54324
+
+[auth]
+enabled = true
+# 前端是靜態站（GitHub Pages / 本機 static server），不再由 Edge Function 出頁。
+# 本機測試預設用 http://localhost:8000（在 frontend/ 執行 `python3 -m http.server 8000`）。
+# 正式環境請在 Supabase Dashboard → Authentication → URL Configuration 填 GitHub Pages 網址。
+site_url = "http://localhost:8000"
+additional_redirect_urls = ["http://localhost:8000"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+# 極簡：關閉信箱驗證，直接用 Magic Link（OTP）登入
+enable_confirmations = false
+
+# --- Edge Functions ---
+# （前端不再是 Edge Function；已改為 GitHub Pages 靜態站，見 frontend/）
+
+# line-callback：LINE Login OAuth 導回（公開）
+[functions.line-callback]
+verify_jwt = false
+
+# dispatch-notifications：排程推播，由 Cron 帶 service role token 呼叫
+[functions.dispatch-notifications]
+verify_jwt = false
