@@ -2,7 +2,7 @@
 // 只用「公開金鑰」：anon key、Supabase URL、LINE Login channel ID、redirect URI。
 // 秘密（service_role、channel secret）從不進瀏覽器——那些只在 Supabase Edge Functions。
 // 安全靠資料庫的 RLS（每個人只能存取自己的資料），不是靠藏 anon key。
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CFG = window.APP_CONFIG || {};
 
