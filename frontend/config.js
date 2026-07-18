@@ -1,21 +1,17 @@
-// ─────────────────────────────────────────────────────────────
-// 前端公開設定。這裡的值都是「公開金鑰」，可以安全提交進 repo、
-// 也一定會出現在瀏覽器裡——安全性靠資料庫 RLS，不是靠藏這些值。
-// ⚠️ 千萬不要把 secret key（sb_secret_… / service_role）放進來。
-//    那些秘密只放在 Supabase Edge Functions（secrets）。
-// ─────────────────────────────────────────────────────────────
+// Public frontend config. These values are safe to commit and are always
+// visible in the browser; access control comes from database RLS, not secrecy.
+// Never put a service role / secret key here.
 window.APP_CONFIG = {
-  // Supabase 專案（Settings → API）
   SUPABASE_URL: "https://jqjpgisybdkopscdxocg.supabase.co",
-  // publishable key（sb_publishable_…）＝新版公開客戶端金鑰
+  // publishable key (sb_publishable_...)
   SUPABASE_ANON_KEY: "sb_publishable_Ti3WMCUcDGnUASYyu3W13A_1mFXkugl",
 
-  // 本前端在 GitHub Pages 上的網址（Magic Link 登入會導回這裡）
+  // This frontend's own URL (magic-link login redirects back here).
   APP_URL: "https://joelthchao.github.io/housekeeper/",
 
-  // LINE Login channel ID（Tier 1 綁定 LINE 才需要；Tier 0 用 log 通知可留空）
+  // LINE Login channel id (only needed to bind LINE; leave empty otherwise).
   LINE_LOGIN_CHANNEL_ID: "",
 
-  // LINE 綁定 callback = 你的 Supabase Edge Function（不是這個前端）
+  // LINE bind callback = the Supabase Edge Function (not this frontend).
   LINE_LOGIN_REDIRECT_URI: "https://jqjpgisybdkopscdxocg.supabase.co/functions/v1/line-callback",
 };

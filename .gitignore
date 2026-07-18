@@ -1,18 +1,18 @@
-# 環境變數（切勿提交真實金鑰）
+# Secrets
 .env
 .env.*
 !.env.example
 
-# Supabase 本機暫存
+# Supabase local
 supabase/.branches
 supabase/.temp
 .supabase
 
-# 相依套件與工具快取
+# Dependencies / caches
 node_modules/
 .deno/
 
-# 作業系統 / 編輯器
+# OS / editor
 .DS_Store
 *.log
 .idea/

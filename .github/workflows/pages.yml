@@ -1,7 +1,7 @@
 name: Deploy frontend to GitHub Pages
 
-# 把 frontend/ 這個資料夾發佈到 GitHub Pages。
-# 啟用方式：GitHub repo → Settings → Pages → Build and deployment → Source: GitHub Actions。
+# Publishes frontend/ to GitHub Pages.
+# One-time setup: repo Settings > Pages > Source: GitHub Actions.
 on:
   push:
     branches: [main]
@@ -28,10 +28,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-        with:
-          # 自動啟用 Pages（build_type=workflow），省去手動到 Settings → Pages 開啟。
-          # 需 repo 為 public（GitHub 免費方案），且 workflow 有 pages:write 權限。
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./frontend
