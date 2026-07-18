@@ -1,17 +1,13 @@
-// ============================================================
-// dispatch-notifications — 每日排程推播（由 Supabase Cron 呼叫）
+// Daily job, triggered by pg_cron.
+//   1. require the caller to present the service role key
+//   2. find active items whose next_due_at has passed, for users who have
+//      notifications enabled (LINE binding required only for the line provider)
+//   3. resolve the affiliate link
+//   4. send one message per user, respecting the monthly quota
+//   5. advance last_notified_at (trigger recomputes next_due_at) and log the send
 //
-// 流程：
-//   1. 驗證呼叫者帶了 service role key
-//   2. 撈出到期且啟用的品項（next_due_at <= now），對應到有綁 LINE、
-//      且開啟通知的使用者
-//   3. 需要時解析分潤連結（可插拔抽象層）
-//   4. 依免費額度護欄，將同一使用者的多品項合併成一則 LINE 推播
-//   5. 成功後更新 last_notified_at（trigger 重算 next_due_at）並寫 log
-//
-// 支援 dry_run：只回報將發送的內容，不真的送 LINE、不改資料。
-//   POST body: {"dry_run": true}  或  ?dry_run=1
-// ============================================================
+// dry_run (?dry_run=1 or {"dry_run": true}) reports what would be sent without
+// sending or writing anything.
 import { adminClient } from "../_shared/supabaseAdmin.ts";
 import { buildReminderText, getNotifier } from "../_shared/notifier.ts";
 import { resolveAffiliateUrl } from "../_shared/affiliate.ts";
@@ -50,7 +46,6 @@ async function isDryRun(req: Request): Promise<boolean> {
 }
 
 Deno.serve(async (req: Request) => {
-  // 1. 授權：只接受帶 service role key 的呼叫（Cron 會帶）
   const auth = req.headers.get("Authorization") ?? "";
   if (auth !== "Bearer " + env("SUPABASE_SERVICE_ROLE_KEY")) {
     return new Response(JSON.stringify({ error: "unauthorized" }), {
@@ -75,7 +70,6 @@ Deno.serve(async (req: Request) => {
     failed: 0,
   };
 
-  // 2a. 撈到期且啟用的品項
   const { data: items, error: itemsErr } = await sb
     .from("items")
     .select("id,user_id,title,source_url,affiliate_url,affiliate_status")
@@ -95,8 +89,6 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // 2b. 撈這些使用者中「開啟通知」的 profile
-  //     line provider 需已綁定 line_user_id；log provider 不需要。
   const userIds = [...new Set(dueItems.map((i) => i.user_id))];
   let profQuery = sb
     .from("profiles")
@@ -111,7 +103,6 @@ Deno.serve(async (req: Request) => {
     ((profs ?? []) as Profile[]).map((p) => [p.id, p]),
   );
 
-  // 依使用者分組（只留可通知的）
   const byUser = new Map<string, DueItem[]>();
   for (const it of dueItems) {
     if (!profileMap.has(it.user_id)) continue;
@@ -120,7 +111,6 @@ Deno.serve(async (req: Request) => {
   }
   summary.users_considered = byUser.size;
 
-  // 當月已成功送出的訊息數（額度護欄）
   const { count: sentThisMonth } = await sb
     .from("notifications")
     .select("id", { count: "exact", head: true })
@@ -133,7 +123,7 @@ Deno.serve(async (req: Request) => {
   for (const [uid, userItems] of byUser) {
     const profile = profileMap.get(uid)!;
 
-    // 3. 解析分潤連結（缺 affiliate_url 或仍是 fallback 且有原連結時重試）
+    // Resolve the link, refreshing rows still on the passthrough fallback.
     const linkItems: { title: string; url: string | null }[] = [];
     for (const it of userItems) {
       let url = it.affiliate_url;
@@ -153,7 +143,7 @@ Deno.serve(async (req: Request) => {
 
     const text = buildReminderText(linkItems);
 
-    // 4. 額度護欄：每位使用者 1 則
+    // One message per user.
     if (sentCount + 1 > quota) {
       summary.skipped_quota++;
       if (!dryRun) {
@@ -171,13 +161,10 @@ Deno.serve(async (req: Request) => {
       continue;
     }
 
-    // 5. 送出（依 NOTIFIER_PROVIDER：log 只印 log、line 真的推播）
     const result = await notifier.send(profile.line_user_id, text);
-
     if (result.ok) {
       sentCount++;
       summary.messages_sent++;
-      // 推進每個品項的 last_notified_at（trigger 會重算 next_due_at）
       const ids = userItems.map((i) => i.id);
       await sb.from("items").update({ last_notified_at: nowIso }).in("id", ids);
       await sb.from("notifications").insert({
@@ -186,8 +173,8 @@ Deno.serve(async (req: Request) => {
         line_message_id: result.id ?? null,
       });
     } else {
+      // Leave next_due_at unchanged so the next run retries.
       summary.failed++;
-      // 失敗不推進 next_due_at，下次排程會再試
       await sb.from("notifications").insert({
         user_id: uid,
         status: "failed",

@@ -1,13 +1,9 @@
-// ============================================================
-// line-callback — LINE Login OAuth 2.1 導回端點
-//
-// 前端把使用者的 Supabase access token 當作 state 送去 LINE，
-// LINE 完成登入後帶著 code + state 導回這裡。流程：
-//   1. 用 state（access token）驗證是哪個 Supabase 使用者
-//   2. 用 code 向 LINE 換 id_token，取出 sub = line_user_id
-//   3. 用 service role 把 line_user_id 寫回該使用者的 profile
-//   4. 導回前端 #/settings?line=ok
-// ============================================================
+// LINE Login OAuth 2.1 callback.
+// The frontend passes the user's Supabase access token as `state`. Here we:
+//   1. identify the Supabase user from `state`
+//   2. exchange `code` for an id_token and read the LINE user id (sub)
+//   3. store it on the user's profile (service role)
+//   4. redirect back to the frontend
 import { adminClient, getUserFromToken } from "../_shared/supabaseAdmin.ts";
 
 const env = (k: string) => Deno.env.get(k) ?? "";
@@ -30,14 +26,14 @@ interface LineIdPayload {
   picture?: string;
 }
 
-// 驗證 LINE id_token（HS256，以 Login channel secret 簽章）並回傳 payload。
+// Verify the LINE id_token (HS256, signed with the Login channel secret).
 async function verifyLineIdToken(
   idToken: string,
   channelId: string,
   channelSecret: string,
 ): Promise<LineIdPayload> {
   const parts = idToken.split(".");
-  if (parts.length !== 3) throw new Error("id_token 格式錯誤");
+  if (parts.length !== 3) throw new Error("malformed id_token");
   const [h, p, sig] = parts;
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -53,15 +49,15 @@ async function verifyLineIdToken(
     base64urlToBytes(sig),
     enc.encode(h + "." + p),
   );
-  if (!ok) throw new Error("id_token 簽章驗證失敗");
+  if (!ok) throw new Error("bad id_token signature");
 
   const payload = JSON.parse(
     new TextDecoder().decode(base64urlToBytes(p)),
   ) as LineIdPayload;
 
-  if (payload.iss !== "https://access.line.me") throw new Error("iss 不符");
-  if (payload.aud !== channelId) throw new Error("aud 不符");
-  if (payload.exp * 1000 < Date.now()) throw new Error("id_token 已過期");
+  if (payload.iss !== "https://access.line.me") throw new Error("bad iss");
+  if (payload.aud !== channelId) throw new Error("bad aud");
+  if (payload.exp * 1000 < Date.now()) throw new Error("id_token expired");
   return payload;
 }
 
@@ -82,11 +78,9 @@ Deno.serve(async (req: Request) => {
   if (lineError || !code || !stateToken) return redirectBack("err");
 
   try {
-    // 1. state = Supabase access token → 找出使用者
     const user = await getUserFromToken(stateToken);
     if (!user) return redirectBack("err");
 
-    // 2. 用 code 換 LINE token
     const tokenRes = await fetch("https://api.line.me/oauth2/v2.1/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -99,20 +93,19 @@ Deno.serve(async (req: Request) => {
       }),
     });
     if (!tokenRes.ok) {
-      console.error("LINE token 交換失敗", await tokenRes.text());
+      console.error("LINE token exchange failed", await tokenRes.text());
       return redirectBack("err");
     }
     const token = await tokenRes.json();
     if (!token.id_token) return redirectBack("err");
 
-    // 3. 驗證並解出 line_user_id
     const payload = await verifyLineIdToken(
       token.id_token,
       env("LINE_LOGIN_CHANNEL_ID"),
       env("LINE_LOGIN_CHANNEL_SECRET"),
     );
 
-    // 4. service role 寫回 profile
+    // line_user_id is unique; fails here if already bound to another account.
     const sb = adminClient();
     const { error } = await sb
       .from("profiles")
@@ -121,15 +114,13 @@ Deno.serve(async (req: Request) => {
         line_display_name: payload.name ?? null,
       })
       .eq("id", user.id);
-
-    // line_user_id 具唯一性；若已被別的帳號綁定會在此失敗
     if (error) {
-      console.error("寫入 profile 失敗", error.message);
+      console.error("profile update failed", error.message);
       return redirectBack("err");
     }
     return redirectBack("ok");
   } catch (e) {
-    console.error("line-callback 例外", e instanceof Error ? e.message : e);
+    console.error("line-callback error", e instanceof Error ? e.message : e);
     return redirectBack("err");
   }
 });

@@ -1,9 +1,6 @@
-// ============================================================
-// line.ts — LINE Messaging API push message 傳輸層（純 LINE 呼叫）
-// 由 notifier.ts 的 LineNotifier 使用；訊息組字在 notifier.ts。
-// 文件：https://developers.line.biz/en/reference/messaging-api/#send-push-message
-// 免費方案每月 200 則；1 次 push 給 1 位使用者算 1 則。
-// ============================================================
+// LINE Messaging API push transport. Used by LineNotifier.
+// https://developers.line.biz/en/reference/messaging-api/#send-push-message
+// Free tier: 200 messages/month; one push to one user counts as one.
 
 export interface LineTextMessage {
   type: "text";
@@ -17,7 +14,6 @@ export interface PushResult {
   error?: string;
 }
 
-/** 推播一則（或多則）訊息給單一使用者。 */
 export async function pushMessage(
   to: string,
   messages: LineTextMessage[],
@@ -39,6 +35,6 @@ export async function pushMessage(
   try {
     const body = await res.json();
     if (body?.message) error = body.message;
-  } catch { /* 忽略非 JSON 回應 */ }
+  } catch { /* non-JSON error body */ }
   return { ok: false, status: res.status, requestId, error };
 }

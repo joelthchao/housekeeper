@@ -1,19 +1,17 @@
-// 前端邏輯（靜態，部署在 GitHub Pages）。
-// 只用「公開金鑰」：anon key、Supabase URL、LINE Login channel ID、redirect URI。
-// 秘密（service_role、channel secret）從不進瀏覽器——那些只在 Supabase Edge Functions。
-// 安全靠資料庫的 RLS（每個人只能存取自己的資料），不是靠藏 anon key。
+// Static frontend (GitHub Pages). Uses public values only: publishable key,
+// Supabase URL, LINE Login channel id, redirect URI. Secrets never reach the
+// browser; access control is enforced by database RLS.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const CFG = window.APP_CONFIG || {};
 
-// 尚未設定 config.js 時，給清楚指示而不是壞掉
 function notConfigured() {
   return !CFG.SUPABASE_URL || !CFG.SUPABASE_ANON_KEY ||
     CFG.SUPABASE_URL.indexOf("YOUR-REF") >= 0;
 }
 if (notConfigured()) {
   document.getElementById("app").innerHTML =
-    '<div class="banner">尚未設定。請編輯 <b>frontend/config.js</b>，填入你的 Supabase URL / anon key ' +
+    '<div class="banner">尚未設定。請編輯 <b>frontend/config.js</b>，填入你的 Supabase URL / publishable key ' +
     '（以及要用 LINE 綁定時的 LINE Login 資訊），再重新整理。</div>';
   throw new Error("APP_CONFIG not set");
 }
@@ -30,12 +28,12 @@ function toast(msg){ var t=document.getElementById("toast"); t.textContent=msg;
   t.classList.add("show"); setTimeout(function(){ t.classList.remove("show"); },1800); }
 function route(){ var h=location.hash.replace(/^#/,""); return h.split("?")[0] || "/"; }
 
-// ---------- 資料存取 ----------
+// --- Data ---
 async function loadProfile(){
   var uid = state.session.user.id;
   var r = await sb.from("profiles").select("*").eq("id", uid).maybeSingle();
   if(r.data){ state.profile = r.data; return; }
-  // 保險：trigger 若未建立 profile 就補建
+  // Create the profile if the signup trigger did not.
   var up = await sb.from("profiles").upsert({ id: uid }).select("*").maybeSingle();
   state.profile = up.data || { id: uid, notify_enabled:true, timezone:"Asia/Taipei" };
 }
@@ -44,7 +42,7 @@ async function loadItems(){
   state.items = r.data || [];
 }
 
-// ---------- 畫面 ----------
+// --- Views ---
 function renderNav(){
   var nav = document.getElementById("nav");
   if(!state.session){ nav.innerHTML = '<span class="title">定期補貨提醒</span>'; return; }
@@ -117,7 +115,7 @@ function renderSettings(){
     lineBlock = '<p>✅ 已綁定 LINE'+(p.line_display_name?'（'+esc(p.line_display_name)+'）':'')+'</p>' +
                 '<button class="ghost" data-act="line-unbind">解除綁定</button>';
   } else if(!CFG.LINE_LOGIN_CHANNEL_ID){
-    lineBlock = '<p class="muted">尚未設定 LINE Login（config.js 的 LINE_LOGIN_CHANNEL_ID 為空）。Tier 0 用 log 通知可先略過。</p>';
+    lineBlock = '<p class="muted">尚未設定 LINE Login（config.js 的 LINE_LOGIN_CHANNEL_ID 為空）。log 通知模式可先略過。</p>';
   } else {
     lineBlock = '<p class="muted">綁定後才能收到補貨提醒推播。</p>' +
                 '<button class="primary" data-act="line-bind">綁定 LINE 接收通知</button>';
@@ -139,7 +137,7 @@ async function render(){
   else { await loadItems(); renderItems(); }
 }
 
-// ---------- 事件 ----------
+// --- Events ---
 function lineAuthUrl(){
   var u = new URL("https://access.line.me/oauth2/v2.1/authorize");
   u.searchParams.set("response_type","code");
@@ -229,14 +227,14 @@ document.addEventListener("change", async function(e){
 
 window.addEventListener("hashchange", render);
 
-// LINE 綁定導回後的提示
+// Toast after returning from the LINE bind flow.
 function checkLineReturn(){
   var h = location.hash;
   if(h.indexOf("line=ok")>=0){ toast("LINE 綁定成功"); location.hash="#/settings"; }
   else if(h.indexOf("line=err")>=0){ toast("LINE 綁定失敗，請再試一次"); location.hash="#/settings"; }
 }
 
-// ---------- 啟動 ----------
+// --- Start ---
 sb.auth.onAuthStateChange(function(_e, session){ state.session = session; render(); });
 (async function(){
   var s = await sb.auth.getSession();

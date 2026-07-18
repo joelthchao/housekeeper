@@ -1,5 +1,4 @@
-# Supabase 專案設定
-# 詳細說明：https://supabase.com/docs/guides/local-development/cli/config
+# Supabase project config: https://supabase.com/docs/guides/local-development/cli/config
 project_id = "housekeeper"
 
 [api]
@@ -19,36 +18,27 @@ enabled = true
 port = 54323
 
 [inbucket]
-# 本機測試信箱（Magic Link 登入信會寄到這裡）
+# Local test mailbox (magic-link emails land here).
 enabled = true
 port = 54324
 
 [auth]
 enabled = true
-# 前端是靜態站（GitHub Pages）。site_url = 正式前端網址；
-# additional_redirect_urls 一併保留本機 static server（http://localhost:8000）供本機開發。
-# 若 GitHub 整合會把 config.toml 同步到線上，這裡就是正式設定的來源（infra as code）。
-site_url = "https://joelthchao.github.io/housekeeper/"
-additional_redirect_urls = [
-  "https://joelthchao.github.io/housekeeper/",
-  "https://joelthchao.github.io/housekeeper/**",
-  "http://localhost:8000"
-]
+# Local development values. Production auth URLs are set in the Supabase
+# dashboard (Authentication -> URL Configuration).
+site_url = "http://localhost:8000"
+additional_redirect_urls = ["http://localhost:8000"]
 jwt_expiry = 3600
 enable_signup = true
 
 [auth.email]
 enable_signup = true
-# 極簡：關閉信箱驗證，直接用 Magic Link（OTP）登入
+# Passwordless magic-link login; no confirmation email step.
 enable_confirmations = false
 
-# --- Edge Functions ---
-# （前端不再是 Edge Function；已改為 GitHub Pages 靜態站，見 frontend/）
-
-# line-callback：LINE Login OAuth 導回（公開）
+# The frontend is a static site (see frontend/), not an Edge Function.
 [functions.line-callback]
 verify_jwt = false
 
-# dispatch-notifications：排程推播，由 Cron 帶 service role token 呼叫
 [functions.dispatch-notifications]
 verify_jwt = false
