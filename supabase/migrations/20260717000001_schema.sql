@@ -1,5 +1,6 @@
 -- ============================================================
--- 0001_schema.sql — 資料表、trigger、索引
+-- 20260717000001_schema.sql — 資料表、trigger、索引
+-- 全部可重複執行（if not exists / or replace）。
 -- ============================================================
 
 -- gen_random_uuid() 在 Postgres 13+ 內建；Supabase 亦提供 pgcrypto
@@ -31,7 +32,7 @@ create table if not exists public.profiles (
   updated_at        timestamptz not null default now()
 );
 
-create trigger trg_profiles_updated_at
+create or replace trigger trg_profiles_updated_at
   before update on public.profiles
   for each row execute function public.set_updated_at();
 
@@ -50,8 +51,7 @@ begin
 end;
 $$;
 
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
+create or replace trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
@@ -87,12 +87,12 @@ begin
 end;
 $$;
 
-create trigger trg_items_next_due
+create or replace trigger trg_items_next_due
   before insert or update of interval_days, last_notified_at, created_at
   on public.items
   for each row execute function public.compute_next_due_at();
 
-create trigger trg_items_updated_at
+create or replace trigger trg_items_updated_at
   before update on public.items
   for each row execute function public.set_updated_at();
 

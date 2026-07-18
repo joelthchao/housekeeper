@@ -25,11 +25,15 @@ port = 54324
 
 [auth]
 enabled = true
-# 前端是靜態站（GitHub Pages / 本機 static server），不再由 Edge Function 出頁。
-# 本機測試預設用 http://localhost:8000（在 frontend/ 執行 `python3 -m http.server 8000`）。
-# 正式環境請在 Supabase Dashboard → Authentication → URL Configuration 填 GitHub Pages 網址。
-site_url = "http://localhost:8000"
-additional_redirect_urls = ["http://localhost:8000"]
+# 前端是靜態站（GitHub Pages）。site_url = 正式前端網址；
+# additional_redirect_urls 一併保留本機 static server（http://localhost:8000）供本機開發。
+# 若 GitHub 整合會把 config.toml 同步到線上，這裡就是正式設定的來源（infra as code）。
+site_url = "https://joelthchao.github.io/housekeeper/"
+additional_redirect_urls = [
+  "https://joelthchao.github.io/housekeeper/",
+  "https://joelthchao.github.io/housekeeper/**",
+  "http://localhost:8000"
+]
 jwt_expiry = 3600
 enable_signup = true
 
