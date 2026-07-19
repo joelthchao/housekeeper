@@ -113,6 +113,7 @@ function renderSettings(){
   var lineBlock;
   if(p.line_user_id){
     lineBlock = '<p>✅ 已綁定 LINE'+(p.line_display_name?'（'+esc(p.line_display_name)+'）':'')+'</p>' +
+                '<button class="ghost" data-act="test-notify">立即測試通知</button> ' +
                 '<button class="ghost" data-act="line-unbind">解除綁定</button>';
   } else if(!CFG.LINE_LOGIN_CHANNEL_ID){
     lineBlock = '<p class="muted">尚未設定 LINE Login（config.js 的 LINE_LOGIN_CHANNEL_ID 為空）。log 通知模式可先略過。</p>';
@@ -187,6 +188,16 @@ document.addEventListener("click", async function(e){
     var up = await sb.from("profiles").update({ notify_enabled: notify, timezone: tz })
       .eq("id", state.session.user.id);
     toast(up.error ? ("儲存失敗："+up.error.message) : "已儲存");
+    return;
+  }
+  if(act==="test-notify"){
+    toast("送出中…");
+    var tn = await sb.functions.invoke("test-notify");
+    if(tn.error){ toast("測試失敗，請重新登入再試"); return; }
+    var d = tn.data || {};
+    if(d.ok){ toast(d.provider==="line" ? "已送出，看你的 LINE 📲" : "log 模式：已印到 function log"); }
+    else if(d.error==="not_bound"){ toast("請先綁定 LINE"); }
+    else { toast("測試失敗："+(d.error||"unknown")); }
     return;
   }
   if(act==="line-bind"){ location.href = lineAuthUrl(); return; }

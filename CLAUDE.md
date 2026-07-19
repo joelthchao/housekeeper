@@ -38,6 +38,7 @@ Secrets (service role key, LINE channel secrets, SMTP) live only in Supabase, ne
 | `supabase/migrations/` | Schema, RLS, triggers — auto-applied on merge to `main` |
 | `supabase/functions/dispatch-notifications/` | Daily job: find due items → resolve link → notify → update |
 | `supabase/functions/line-callback/` | LINE Login OAuth callback that stores the user's LINE id |
+| `supabase/functions/test-notify/` | Sends a test reminder to the caller's own LINE (in-app "test" button) |
 | `supabase/functions/_shared/` | Shared modules (see below) |
 | `supabase/scripts/enable_cron.sql` | One-off cloud script to schedule the daily job |
 
