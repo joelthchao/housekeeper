@@ -47,7 +47,7 @@ Secrets (service role key, LINE channel secrets, SMTP) live only in Supabase, ne
 Two swap points, selected by env var, so the same call site works for the MVP stub and the real integration:
 
 - **Notifier** (`_shared/notifier.ts`, `NOTIFIER_PROVIDER`): `log` (default, prints) or `line` (LINE push).
-- **Affiliate** (`_shared/affiliate.ts`, `AFFILIATE_PROVIDER`): `passthrough` (default, original URL) or `affiliatesone`.
+- **Affiliate** (`_shared/affiliate.ts`, `AFFILIATE_PROVIDER`): `passthrough` (default, original URL) or `affiliatesone`. Items without an explicit link fall back to a shopping-site search URL built from the name (`searchUrl`, `SEARCH_URL_TEMPLATE`).
 
 ## Data model
 

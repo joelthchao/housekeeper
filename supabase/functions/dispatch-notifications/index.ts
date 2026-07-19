@@ -10,7 +10,7 @@
 // sending or writing anything.
 import { adminClient } from "../_shared/supabaseAdmin.ts";
 import { buildReminderText, getNotifier } from "../_shared/notifier.ts";
-import { resolveAffiliateUrl } from "../_shared/affiliate.ts";
+import { resolveAffiliateUrl, searchUrl } from "../_shared/affiliate.ts";
 
 const env = (k: string) => Deno.env.get(k) ?? "";
 
@@ -124,11 +124,13 @@ Deno.serve(async (req: Request) => {
     const profile = profileMap.get(uid)!;
 
     // Resolve the link, refreshing rows still on the passthrough fallback.
+    // No explicit source_url -> search the item name on a shopping site.
     const linkItems: { title: string; url: string | null }[] = [];
     for (const it of userItems) {
+      const base = it.source_url || searchUrl(it.title, env);
       let url = it.affiliate_url;
-      if ((!url || it.affiliate_status === "fallback") && it.source_url) {
-        const r = await resolveAffiliateUrl(it.source_url, env);
+      if (!url || it.affiliate_status === "fallback") {
+        const r = await resolveAffiliateUrl(base, env);
         url = r.url;
         if (!dryRun) {
           await sb.from("items").update({
@@ -138,7 +140,7 @@ Deno.serve(async (req: Request) => {
           }).eq("id", it.id);
         }
       }
-      linkItems.push({ title: it.title, url: url ?? it.source_url });
+      linkItems.push({ title: it.title, url: url ?? base });
     }
 
     const text = buildReminderText(linkItems);
