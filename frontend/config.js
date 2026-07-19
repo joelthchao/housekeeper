@@ -10,7 +10,7 @@ window.APP_CONFIG = {
   APP_URL: "https://joelthchao.github.io/housekeeper/",
 
   // LINE Login channel id (only needed to bind LINE; leave empty otherwise).
-  LINE_LOGIN_CHANNEL_ID: "",
+  LINE_LOGIN_CHANNEL_ID: "2010756488",
 
   // LINE bind callback = the Supabase Edge Function (not this frontend).
   LINE_LOGIN_REDIRECT_URI: "https://jqjpgisybdkopscdxocg.supabase.co/functions/v1/line-callback",
