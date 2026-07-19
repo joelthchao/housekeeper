@@ -42,3 +42,7 @@ verify_jwt = false
 
 [functions.dispatch-notifications]
 verify_jwt = false
+
+# Auth handled in-function so CORS preflight is not blocked.
+[functions.test-notify]
+verify_jwt = false
