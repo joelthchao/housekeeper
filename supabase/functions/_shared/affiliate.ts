@@ -17,6 +17,18 @@ export interface AffiliateProvider {
   resolve(sourceUrl: string): Promise<AffiliateResult>;
 }
 
+// Turn an item name into a shopping-site search URL. No datafeed/scraping —
+// the user lands on search results for the term. SEARCH_URL_TEMPLATE overrides
+// the site; {q} is the URL-encoded query.
+export function searchUrl(
+  query: string,
+  env: (key: string) => string | undefined,
+): string {
+  const tmpl = env("SEARCH_URL_TEMPLATE") ||
+    "https://www.momoshop.com.tw/search/searchShop.jsp?keyword={q}";
+  return tmpl.replace("{q}", encodeURIComponent(query.trim()));
+}
+
 export function isHttpUrl(value: string | null | undefined): value is string {
   if (!value) return false;
   try {

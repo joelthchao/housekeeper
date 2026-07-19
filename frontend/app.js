@@ -74,6 +74,16 @@ function intervalPresets(current){
   return html;
 }
 
+var SUGGESTIONS = ["衛生紙","貓砂","洗髮精","沐浴乳","牙膏","洗衣精","咖啡","隱形眼鏡藥水","貓糧","狗糧","維他命","刮鬍刀片"];
+function suggestionChips(){
+  var html='<div class="presets">';
+  for(var i=0;i<SUGGESTIONS.length;i++){
+    html += '<span class="chip" data-suggest="'+esc(SUGGESTIONS[i])+'">'+esc(SUGGESTIONS[i])+'</span>';
+  }
+  html += '</div>';
+  return html;
+}
+
 function renderItems(){
   var list="";
   if(state.items.length===0){
@@ -99,10 +109,13 @@ function renderItems(){
   document.getElementById("app").innerHTML =
     '<div class="card">' +
       '<h2>新增補貨品項</h2>' +
-      '<label>品項名稱</label><input id="i-title" type="text" placeholder="例：貓砂、隱形眼鏡藥水" />' +
-      '<label>電商連結（選填）</label><input id="i-url" type="url" placeholder="https://..." />' +
-      '<label>補貨週期</label>' + intervalPresets(state.addInterval) +
+      '<label>要定期補貨什麼？</label><input id="i-title" type="text" placeholder="例：貓砂、隱形眼鏡藥水" />' +
+      '<div style="margin-top:6px" class="muted">常買的，點一下帶入：</div>' +
+      suggestionChips() +
+      '<label>多久補一次？</label>' + intervalPresets(state.addInterval) +
       '<input id="i-interval" type="number" min="1" max="3650" value="'+state.addInterval+'" style="margin-top:8px" />' +
+      '<details style="margin-top:12px"><summary class="muted" style="cursor:pointer">進階：指定商品連結（選填）</summary>' +
+        '<input id="i-url" type="url" placeholder="通常免填，提醒會用名稱產生搜尋連結" style="margin-top:8px" /></details>' +
       '<button class="primary" data-act="add">新增</button>' +
     '</div>' +
     '<div class="card"><h2>我的品項（'+state.items.length+'）</h2>'+list+'</div>';
@@ -157,6 +170,8 @@ document.addEventListener("click", async function(e){
   if(go){ location.hash = "#"+go; return; }
   var preset = t.getAttribute && t.getAttribute("data-preset");
   if(preset){ state.addInterval = parseInt(preset,10); renderItems(); return; }
+  var sug = t.getAttribute && t.getAttribute("data-suggest");
+  if(sug){ var ti=document.getElementById("i-title"); if(ti){ ti.value=sug; ti.focus(); } return; }
   var act = t.getAttribute && t.getAttribute("data-act");
 
   if(act==="magic"){

@@ -4,6 +4,7 @@ import {
   getAffiliateProvider,
   isHttpUrl,
   resolveAffiliateUrl,
+  searchUrl,
 } from "./affiliate.ts";
 
 let passed = 0;
@@ -49,6 +50,17 @@ assert(!isHttpUrl(null), "null is not valid");
 {
   const r = await resolveAffiliateUrl("javascript:alert(1)", envOf({}));
   assert(r.status === "fallback", "non-http url falls back");
+}
+
+{
+  const u = searchUrl("貓砂", envOf({}));
+  assert(u.indexOf("keyword=") >= 0, "search url has a keyword param");
+  assert(u.indexOf(encodeURIComponent("貓砂")) >= 0, "query is url-encoded");
+  assert(isHttpUrl(u), "search url is a valid http url");
+}
+{
+  const u = searchUrl("cat litter", envOf({ SEARCH_URL_TEMPLATE: "https://x.test/s?q={q}" }));
+  assert(u === "https://x.test/s?q=cat%20litter", "template is overridable");
 }
 
 console.log(`ok - ${passed} assertions passed`);
